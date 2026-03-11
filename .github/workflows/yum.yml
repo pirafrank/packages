@@ -79,10 +79,10 @@ jobs:
       - name: Load matrix
         id: matrix
         run: |
-          echo "matrix=$(grep -v '//' "configurations/${{ steps.resolve.outputs.app_name }}.matrix.jsonc" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(grep -v '//' "matrices/yum/${{ steps.resolve.outputs.app_name }}.matrix.jsonc" | jq -c '.')" >> "$GITHUB_OUTPUT"
 
   download_and_package:
-    name: Download and package (${{ matrix.arch }})
+    name: Download and package (${{ matrix.rpm_arch }})
     needs: checks
     runs-on: ubuntu-latest
     strategy:
@@ -146,7 +146,6 @@ jobs:
         run: mkdir -p packages/rpm
 
       - name: Build .rpm packages
-        if: ${{ !matrix.apt_only }}
         env:
           APP_NAME: ${{ needs.checks.outputs.APP_NAME }}
           APP_VERSION: ${{ needs.checks.outputs.APP_VERSION }}
@@ -169,10 +168,9 @@ jobs:
           done
 
       - name: Upload package artifacts
-        if: ${{ !matrix.apt_only }}
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ needs.checks.outputs.APP_NAME }}-packages-${{ matrix.arch }}
+          name: ${{ needs.checks.outputs.APP_NAME }}-packages-${{ matrix.rpm_arch }}
           path: packages/
           if-no-files-found: error
           retention-days: 1

@@ -79,7 +79,7 @@ jobs:
       - name: Load matrix
         id: matrix
         run: |
-          echo "matrix=$(grep -v '//' "configurations/${{ steps.resolve.outputs.app_name }}.matrix.jsonc" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(grep -v '//' "matrices/apt/${{ steps.resolve.outputs.app_name }}.matrix.jsonc" | jq -c '.')" >> "$GITHUB_OUTPUT"
 
   download_and_package:
     name: Download and package (${{ matrix.arch }})
