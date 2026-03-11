@@ -1,9 +1,10 @@
-# pirafrank's APT/YUM package repository
+# pirafrank's APT/YUM/APK package repository
 
 Home of my tools for package managers for popular Linux distributions:
 
 [Debian/Ubuntu-based systems (APT)](#debian-and-ubuntu-apt) |
-[Red Hat-based systems (DNF/YUM)](#fedora-rhel-centos-amazon-linux)
+[Red Hat-based systems (DNF/YUM)](#fedora-rhel-centos-amazon-linux) |
+[Alpine Linux (APK)](#alpine-linux-apk)
 
 ## Published apps
 
@@ -140,4 +141,49 @@ To also remove the repository:
 
 ```sh
 sudo rm /etc/yum.repos.d/pirafrank.repo
+```
+
+## Alpine Linux (APK)
+
+### Supported architectures
+
+- `x86_64`
+- `aarch64`
+- `armv7`
+- `riscv64`
+
+### Supported versions
+
+We support the latest four stable Alpine in the repository.
+
+- Alpine 3.23
+- Alpine 3.22
+- Alpine 3.21
+- Alpine 3.20
+
+You can always use other install methods (e.g. install script, or manual download
+from releases) to bring musl builds to older Alpine versions.
+
+### Install
+
+```sh
+wget -q -O /etc/apk/keys/signing-key.rsa.pub \
+  https://pkg.fpira.com/apk/signing-key.rsa.pub
+ALPINE_VERSION=$(cat /etc/alpine-release | cut -d. -f1,2)
+echo "https://pkg.fpira.com/apk/v${ALPINE_VERSION}" \
+  >> /etc/apk/repositories
+apk update && apk add <APPNAME>
+```
+
+### Uninstall
+
+```sh
+apk del <APPNAME>
+```
+
+To also remove the repository:
+
+```sh
+sed -i '/pkg\.fpira\.com\/apk/d' /etc/apk/repositories
+rm -f /etc/apk/keys/signing-key.rsa.pub
 ```

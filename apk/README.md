@@ -1,7 +1,7 @@
 # Alpine APK packages
 
 This directory contains the build tooling for creating Alpine Linux (APK)
-packages for poof.
+packages for tools in `../configurations` directory.
 
 ## Files
 

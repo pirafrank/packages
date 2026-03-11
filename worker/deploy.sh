@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-# poof repo worker deploy script
+# packages repo worker deploy script
 #
 
 set -e

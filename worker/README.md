@@ -1,11 +1,11 @@
 # Cloudflare Worker Setup
 
 This guide covers setting up a Cloudflare Worker backed by an R2 bucket to serve
-the poof APT and YUM repositories at `pkg.fpira.com`.
+the APT, YUM, and APK repositories at `pkg.fpira.com`.
 
 It was inspired by [this article](https://blog.cloudflare.com/using-cloudflare-r2-as-an-apt-yum-repository/),
 yet I did not use exactly same scripts in an effort to make the whole process
-easier and more suited for the poof workflow.
+easier and more suited for my workflow.
 
 ## How it works
 
@@ -37,7 +37,7 @@ Full procedure follows.
 ### Step 1 - Create the R2 bucket
 
 ```sh
-wrangler r2 bucket create poof-packages
+wrangler r2 bucket create repo-packages
 ```
 
 Confirm it exists:
@@ -54,7 +54,7 @@ in [packages.yml](../../.github/workflows/packages.yml) Actions workflow.
 Create a directory for the Worker alongside the repository (or anywhere convenient):
 
 ```sh
-mkdir poof-pkg-worker && cd poof-pkg-worker
+mkdir worker && cd worker
 ```
 
 - Create `wrangler.toml`
@@ -73,7 +73,7 @@ wrangler deploy
 Wrangler CLI will:
 
 1. Upload the Worker script
-2. Bind the `poof-packages` R2 bucket to it
+2. Bind the `repo-packages` R2 bucket to it
 
 Verify the deployment:
 
@@ -88,7 +88,7 @@ uploads to R2 using the AWS-compatible S3 API. It needs a dedicated API token.
 
 1. Go to **Cloudflare Dashboard → R2 → Manage R2 API Tokens**
 2. Click **Create API token**
-3. Set permissions to **Object Read & Write** scoped to the `poof-packages`
+3. Set permissions to **Object Read & Write** scoped to the `repo-packages`
 bucket (for security reasons, we scope it with the least privileges)
 4. Save the **Access Key ID** and **Secret Access Key**
 
@@ -98,7 +98,7 @@ Set the following secrets in *Repository settings → Secrets and variables → 
 |---|---|
 | `R2_ACCESS_KEY_ID` | Access Key ID from the token above |
 | `R2_SECRET_ACCESS_KEY` | Secret Access Key from the token above |
-| `R2_BUCKET_NAME` | `poof-packages` |
+| `R2_BUCKET_NAME` | `repo-packages` |
 | `R2_ACCOUNT_ID` | Your Cloudflare account ID (found in the dashboard right sidebar) |
 
 Also, we need to add a (new) dedicated GPG key to sign packages:
@@ -116,7 +116,7 @@ Also, we need to add a (new) dedicated GPG key to sign packages:
 #### How to generate a new GPG key pair
 
 ```sh
-# Generate a new key (use "poof repository" as the name, no expiry)
+# Generate a new key
 gpg --full-generate-key
 
 # Find the key ID
@@ -144,4 +144,3 @@ your key.
 
 Run the [packages.yml](../../.github/workflows/packages.yml) pipeline. It will take
 care of the rest.
-
