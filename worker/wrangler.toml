@@ -1,0 +1,11 @@
+name = "repo-pkg"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "repo-packages"
+
+[[routes]]
+pattern = "pkg.fpira.com/*"
+zone_name = "fpira.com"

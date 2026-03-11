@@ -1,0 +1,7 @@
+{
+    "source_repo": "pirafrank/poof",
+    "maintainer": "Francesco Pira <dev@fpira.com>",
+    "description": "Easy to use zero-config, zero-install, zero-dependencies manager of pre-built software that works like magic",
+    "url": "https://github.com/pirafrank/poof",
+    "category": "utils"
+}
