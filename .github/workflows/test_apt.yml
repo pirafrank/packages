@@ -1,0 +1,40 @@
+name: Test APT repository
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'configurations/**'
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+
+jobs:
+  test_apt:
+    name: Test APT repository install
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build APT test images
+        run: |
+          cd tests
+          docker buildx build --load -t apt-test -f apt.dockerfile .
+
+      - name: Test project packages
+        run: |
+          for project_name in $(ls -1 configurations/*.jsonc | cut -d'/' -f2 | cut -d'.' -f1 | sort | uniq); do
+            echo "--------------------------------"
+            echo "Testing $project_name..."
+            docker run --rm apt-test bash -c "/apt.sh $project_name"
+            echo "--------------------------------"
+          done

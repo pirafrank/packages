@@ -1,0 +1,39 @@
+name: Test YUM repository
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'configurations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test_yum:
+    name: Test YUM repository install
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build YUM test images
+        run: |
+          cd tests
+          docker buildx build --load -t yum-test -f yum.dockerfile .
+
+      - name: Test project packages
+        run: |
+          for project_name in $(ls -1 configurations/*.jsonc | cut -d'/' -f2 | cut -d'.' -f1 | sort | uniq); do
+            echo "--------------------------------"
+            echo "Testing $project_name..."
+            docker run --rm yum-test bash -c "/yum.sh $project_name"
+            echo "--------------------------------"
+          done
