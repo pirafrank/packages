@@ -1,0 +1,6 @@
+{
+    "include": [
+        { "arch": "amd64", "target": "x86_64-unknown-linux-gnu",  "rpm_arch": "x86_64",  "glibc_max": "2.18" },
+        { "arch": "arm64", "target": "aarch64-unknown-linux-gnu", "rpm_arch": "aarch64", "glibc_max": "2.18" }
+    ]
+}

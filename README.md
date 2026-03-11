@@ -8,6 +8,7 @@ Home of my tools for package managers for popular Linux distributions:
 ## Published apps
 
 - [poof](https://github.com/pirafrank/poof)
+- [vault-conductor](https://github.com/pirafrank/vault-conductor)
 
 ## Debian and Ubuntu (APT)
 
