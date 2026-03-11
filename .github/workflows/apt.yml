@@ -45,6 +45,7 @@ jobs:
       MAINTAINER: ${{ steps.config.outputs.maintainer }}
       URL: ${{ steps.config.outputs.url }}
       CATEGORY: ${{ steps.config.outputs.category }}
+      LICENSE: ${{ steps.config.outputs.license }}
       MATRIX: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout repository
@@ -75,6 +76,7 @@ jobs:
           echo "maintainer=$(echo "$CONFIG"   | jq -r '.maintainer')"   >> "$GITHUB_OUTPUT"
           echo "url=$(echo "$CONFIG"          | jq -r '.url')"          >> "$GITHUB_OUTPUT"
           echo "category=$(echo "$CONFIG"     | jq -r '.category')"     >> "$GITHUB_OUTPUT"
+          echo "license=$(echo "$CONFIG"      | jq -r '.license')"      >> "$GITHUB_OUTPUT"
 
       - name: Load matrix
         id: matrix
@@ -153,6 +155,7 @@ jobs:
           DESCRIPTION: ${{ needs.checks.outputs.DESCRIPTION }}
           URL: ${{ needs.checks.outputs.URL }}
           CATEGORY: ${{ needs.checks.outputs.CATEGORY }}
+          LICENSE: ${{ needs.checks.outputs.LICENSE }}
         run: |
           fpm -s dir -t deb \
             -n "${APP_NAME}" \
@@ -161,7 +164,7 @@ jobs:
             --maintainer "${MAINTAINER}" \
             --description "${DESCRIPTION}" \
             --url "${URL}" \
-            --license MIT \
+            --license "${LICENSE}" \
             --category "${CATEGORY}" \
             --deb-priority optional \
             -p "packages/deb/${APP_NAME}_${APP_VERSION}_${{ matrix.arch }}.deb" \

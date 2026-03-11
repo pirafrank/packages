@@ -1,0 +1,13 @@
+# Maintainer: @@MAINTAINER@@
+pkgname=@@PKGNAME@@
+pkgver=@@PKGVER@@
+pkgrel=@@PKGREL@@
+pkgdesc="@@PKGDESC@@"
+url="@@URL@@"
+arch="@@ARCH@@"
+license="@@LICENSE@@"
+options="!check !strip !tracedeps"
+
+package() {
+	install -Dm755 /input/@@PKGNAME@@ "$pkgdir/usr/bin/@@PKGNAME@@"
+}

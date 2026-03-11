@@ -45,6 +45,7 @@ jobs:
       MAINTAINER: ${{ steps.config.outputs.maintainer }}
       URL: ${{ steps.config.outputs.url }}
       CATEGORY: ${{ steps.config.outputs.category }}
+      LICENSE: ${{ steps.config.outputs.license }}
       MATRIX: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout repository
@@ -75,6 +76,7 @@ jobs:
           echo "maintainer=$(echo "$CONFIG"   | jq -r '.maintainer')"   >> "$GITHUB_OUTPUT"
           echo "url=$(echo "$CONFIG"          | jq -r '.url')"          >> "$GITHUB_OUTPUT"
           echo "category=$(echo "$CONFIG"     | jq -r '.category')"     >> "$GITHUB_OUTPUT"
+          echo "license=$(echo "$CONFIG"      | jq -r '.license')"      >> "$GITHUB_OUTPUT"
 
       - name: Load matrix
         id: matrix
@@ -152,6 +154,7 @@ jobs:
           MAINTAINER: ${{ needs.checks.outputs.MAINTAINER }}
           DESCRIPTION: ${{ needs.checks.outputs.DESCRIPTION }}
           URL: ${{ needs.checks.outputs.URL }}
+          LICENSE: ${{ needs.checks.outputs.LICENSE }}
         run: |
           for dist in el8 el9 amzn2 amzn2023; do
             fpm -s dir -t rpm \
@@ -162,7 +165,7 @@ jobs:
               --maintainer "${MAINTAINER}" \
               --description "${DESCRIPTION}" \
               --url "${URL}" \
-              --license MIT \
+              --license "${LICENSE}" \
               -p "packages/rpm/${APP_NAME}-${APP_VERSION}-1.${dist}.${{ matrix.rpm_arch }}.rpm" \
               "binary/${APP_NAME}=/usr/local/bin/${APP_NAME}"
           done

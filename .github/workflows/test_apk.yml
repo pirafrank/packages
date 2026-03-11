@@ -1,4 +1,4 @@
-name: Test YUM repository
+name: Test APK repository
 
 on:
   #push:
@@ -12,28 +12,28 @@ permissions:
   contents: read
 
 jobs:
-  test_yum:
-    name: Test YUM repository install
+  test_apk:
+    name: Test APK repository install
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Install Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Build YUM test images
+      - name: Build APK test images
         run: |
           cd tests
-          docker buildx build --load -t yum-test -f yum.dockerfile .
+          docker buildx build --load -t apk-test -f apk.dockerfile .
 
       - name: Test project packages
         run: |
           for project_name in $(ls -1 configurations/*.jsonc | cut -d'/' -f2 | cut -d'.' -f1 | sort | uniq); do
             echo "--------------------------------"
             echo "Testing $project_name..."
-            docker run --rm yum-test bash -c "/yum.sh $project_name"
+            docker run --rm apk-test sh -c "/apk.sh $project_name"
             echo "--------------------------------"
           done

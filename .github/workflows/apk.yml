@@ -1,0 +1,284 @@
+name: APK Repository
+run-name: Package ${{ github.event.client_payload.app_name || inputs.app_name }} ${{ github.event.client_payload.tag || inputs.tag }}
+
+# Required secrets:
+#   PACKAGES_GH_TOKEN    - PAT with public_repo scope to download release assets from other repos
+#   BWS_ACCESS_TOKEN     - Bitwarden machine token for bws
+#   BW_APK_KEY_SECRET_ID - UUID of the APK RSA signing key in Bitwarden Secrets Manager
+#   R2_ACCESS_KEY_ID     - Cloudflare R2 access key
+#   R2_SECRET_ACCESS_KEY - Cloudflare R2 secret key
+#   R2_ACCOUNT_ID        - Cloudflare account ID
+# Required variables:
+#   R2_BUCKET_NAME       - R2 bucket name (e.g. pkg-fpira-com)
+
+on:
+  repository_dispatch:
+    types: [new_release]
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App name (e.g. poof)'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag (e.g. v0.6.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: apk-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  APK_KEY_NAME: signing-key.rsa.pub
+  ALPINE_VERSIONS: "3.20 3.21 3.22 3.23"
+  APK_ARCHS: "x86_64 aarch64 armv7 riscv64"
+
+jobs:
+  checks:
+    name: Resolve inputs and load config
+    runs-on: ubuntu-latest
+    outputs:
+      APP_NAME: ${{ steps.resolve.outputs.app_name }}
+      APP_VERSION: ${{ steps.resolve.outputs.app_version }}
+      SOURCE_REPO: ${{ steps.config.outputs.source_repo }}
+      RESOLVED_TAG: ${{ steps.resolve.outputs.tag }}
+      DESCRIPTION: ${{ steps.config.outputs.description }}
+      MAINTAINER: ${{ steps.config.outputs.maintainer }}
+      URL: ${{ steps.config.outputs.url }}
+      CATEGORY: ${{ steps.config.outputs.category }}
+      LICENSE: ${{ steps.config.outputs.license }}
+      MATRIX: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve inputs from payload or workflow_dispatch
+        id: resolve
+        run: |
+          APP_NAME="${{ github.event.client_payload.app_name || inputs.app_name }}"
+          TAG="${{ github.event.client_payload.tag || inputs.tag }}"
+          APP_VERSION="${TAG#v}"
+
+          echo "app_name=${APP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+
+          echo "App:    ${APP_NAME} ${APP_VERSION}"
+          echo "Source: @ ${TAG}"
+
+      - name: Load app config
+        id: config
+        run: |
+          CONFIG=$(grep -v '//' "configurations/${{ steps.resolve.outputs.app_name }}.jsonc" | jq -r '.')
+          echo "source_repo=$(echo "$CONFIG"  | jq -r '.source_repo')"  >> "$GITHUB_OUTPUT"
+          echo "description=$(echo "$CONFIG"  | jq -r '.description')"  >> "$GITHUB_OUTPUT"
+          echo "maintainer=$(echo "$CONFIG"   | jq -r '.maintainer')"   >> "$GITHUB_OUTPUT"
+          echo "url=$(echo "$CONFIG"          | jq -r '.url')"          >> "$GITHUB_OUTPUT"
+          echo "category=$(echo "$CONFIG"     | jq -r '.category')"     >> "$GITHUB_OUTPUT"
+          echo "license=$(echo "$CONFIG"      | jq -r '.license')"      >> "$GITHUB_OUTPUT"
+
+      - name: Load matrix
+        id: matrix
+        run: |
+          echo "matrix=$(grep -v '//' "matrices/apk/${{ steps.resolve.outputs.app_name }}.matrix.jsonc" | jq -c '.')" >> "$GITHUB_OUTPUT"
+
+  download_and_package:
+    name: Download and package (v${{ matrix.alpine_version }} / ${{ matrix.apk_arch }})
+    needs: checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.checks.outputs.MATRIX) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download release asset
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGES_GH_TOKEN }}
+        run: |
+          gh release download "${{ needs.checks.outputs.RESOLVED_TAG }}" \
+            --repo "${{ needs.checks.outputs.SOURCE_REPO }}" \
+            --pattern "${{ needs.checks.outputs.APP_NAME }}-*-${{ matrix.target }}.tar.gz" \
+            --dir downloads/
+
+      - name: Extract binary
+        run: |
+          mkdir -p binary
+          tar -xzf downloads/${{ needs.checks.outputs.APP_NAME }}-*-${{ matrix.target }}.tar.gz \
+            -C binary/ "${{ needs.checks.outputs.APP_NAME }}"
+
+      - name: Install poof and bws CLI
+        uses: pirafrank/poof@main
+        with:
+          packages: |
+            bitwarden/sdk-sm@bws-v2.0.0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retrieve and convert APK signing key
+        uses: ./.github/actions/retrieve-apk-sign-key
+        with:
+          bws_access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          bw_apk_key_secret_id: ${{ secrets.BW_APK_KEY_SECRET_ID }}
+          apk_key_name: ${{ env.APK_KEY_NAME }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg ALPINE_VERSION=${{ matrix.alpine_version }} \
+            -t apk-builder:${{ matrix.alpine_version }} \
+            apk/
+
+      - name: Build .apk package
+        env:
+          APP_NAME: ${{ needs.checks.outputs.APP_NAME }}
+          APP_VERSION: ${{ needs.checks.outputs.APP_VERSION }}
+          APK_KEY_NAME: ${{ env.APK_KEY_NAME }}
+          MAINTAINER: ${{ needs.checks.outputs.MAINTAINER }}
+          DESCRIPTION: ${{ needs.checks.outputs.DESCRIPTION }}
+          URL: ${{ needs.checks.outputs.URL }}
+          LICENSE: ${{ needs.checks.outputs.LICENSE }}
+        run: |
+          mkdir -p packages/apk
+          # Allow the non-root packager user inside the container to write to /output
+          chmod 777 packages/apk
+          PRIVATE_KEY_NAME="${APK_KEY_NAME%.pub}"
+          docker run --rm \
+            -v "$(pwd)/binary/${APP_NAME}:/input/${APP_NAME}:ro" \
+            -v "$(pwd)/apk-keys:/apk-keys:ro" \
+            -v "$(pwd)/apk/:/apkbuild:ro" \
+            -v "$(pwd)/packages/apk:/output" \
+            -e PKGNAME="${APP_NAME}" \
+            -e PKGVER="${APP_VERSION#v}" \
+            -e PKGREL=0 \
+            -e ARCH="${{ matrix.apk_arch }}" \
+            -e CARCH="${{ matrix.apk_arch }}" \
+            -e KEY_FILE="/apk-keys/${PRIVATE_KEY_NAME}" \
+            -e PKGDESC="${DESCRIPTION}" \
+            -e MAINTAINER="${MAINTAINER}" \
+            -e URL="${URL}" \
+            -e LICENSE="${LICENSE}" \
+            apk-builder:${{ matrix.alpine_version }}
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.checks.outputs.APP_NAME }}-apk-${{ matrix.alpine_version }}-${{ matrix.apk_arch }}
+          path: packages/apk/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish_apk:
+    name: Publish APK repository
+    needs: [checks, download_and_package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ needs.checks.outputs.APP_NAME }}-apk-*
+          path: downloaded-packages
+          merge-multiple: false
+
+      - name: Download existing APK repository from R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          mkdir -p apk-repo
+          aws s3 sync "s3://${R2_BUCKET_NAME}/apk/" apk-repo/ \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto || true
+
+      - name: Organize packages into versioned arch directories
+        env:
+          APP_NAME: ${{ needs.checks.outputs.APP_NAME }}
+        run: |
+          for alpine_version in ${{ env.ALPINE_VERSIONS }}; do
+            for arch in ${{ env.APK_ARCHS }}; do
+              mkdir -p "apk-repo/v${alpine_version}/${arch}"
+              artifact_dir="downloaded-packages/${APP_NAME}-apk-${alpine_version}-${arch}"
+              if [ -d "${artifact_dir}" ]; then
+                find "${artifact_dir}" -name "*.apk" \
+                  -exec cp {} "apk-repo/v${alpine_version}/${arch}/" \;
+              fi
+            done
+          done
+
+      - name: Install poof and bws CLI
+        uses: pirafrank/poof@main
+        with:
+          packages: |
+            bitwarden/sdk-sm@bws-v2.0.0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retrieve and convert APK signing key
+        uses: ./.github/actions/retrieve-apk-sign-key
+        with:
+          bws_access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          bw_apk_key_secret_id: ${{ secrets.BW_APK_KEY_SECRET_ID }}
+          apk_key_name: ${{ env.APK_KEY_NAME }}
+
+      - name: Create APKINDEX and sign
+        env:
+          APK_KEY_NAME: ${{ env.APK_KEY_NAME }}
+        run: |
+          for alpine_version in ${{ env.ALPINE_VERSIONS }}; do
+            docker run --rm \
+              -v "$(pwd)/apk-repo/v${alpine_version}:/apk:rw" \
+              -v "$(pwd)/apk-keys:/apk-keys:ro" \
+              -e APK_KEY_NAME="${APK_KEY_NAME}" \
+              alpine:${alpine_version} sh -c '
+                set -e
+                apk add --no-cache abuild
+                PRIVATE_KEY_NAME="${APK_KEY_NAME%.pub}"
+                # Install the public key into the system trust store so apk index
+                # can verify package signatures without reporting UNTRUSTED errors
+                cp "/apk-keys/${APK_KEY_NAME}" /etc/apk/keys/
+                for arch in ${{ env.APK_ARCHS }}; do
+                  dir="/apk/${arch}"
+                  if [ -d "${dir}" ] && ls "${dir}"/*.apk >/dev/null 2>&1; then
+                    apk index \
+                      --rewrite-arch "${arch}" \
+                      -o "${dir}/APKINDEX.tar.gz" \
+                      "${dir}"/*.apk
+                    abuild-sign \
+                      -k "/apk-keys/${PRIVATE_KEY_NAME}" \
+                      "${dir}/APKINDEX.tar.gz"
+                  fi
+                done
+              '
+          done
+
+      - name: Export APK public key
+        env:
+          APK_KEY_NAME: ${{ env.APK_KEY_NAME }}
+        run: |
+          PRIVATE_KEY_NAME="${APK_KEY_NAME%.pub}"
+          openssl rsa -in "apk-keys/${PRIVATE_KEY_NAME}" -pubout > "apk-repo/${APK_KEY_NAME}"
+
+      - name: Sync APK repository to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          aws s3 sync apk-repo/ "s3://${R2_BUCKET_NAME}/apk/" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto

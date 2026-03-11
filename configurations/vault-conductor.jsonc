@@ -3,5 +3,6 @@
     "maintainer": "Francesco Pira <dev@fpira.com>",
     "description": "An SSH Agent that provides SSH keys stored in Bitwarden Secrets Manager",
     "url": "https://github.com/pirafrank/vault-conductor",
-    "category": "utils"
+    "category": "utils",
+    "license": "MIT"
 }
