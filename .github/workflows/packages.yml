@@ -111,7 +111,7 @@ jobs:
             -C binary/ "${{ needs.checks.outputs.APP_NAME }}"
 
       - name: Setup just runner
-        uses: extractions/setup-just@v2
+        uses: extractions/setup-just@v3
 
       - name: Check glibc version compatibility
         env:
@@ -191,7 +191,7 @@ jobs:
           done
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ needs.checks.outputs.APP_NAME }}-packages-${{ matrix.arch }}
           path: packages/
@@ -205,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: ${{ needs.checks.outputs.APP_NAME }}-packages-*
           path: downloaded-packages
@@ -294,7 +294,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: ${{ needs.checks.outputs.APP_NAME }}-packages-*
           path: downloaded-packages
