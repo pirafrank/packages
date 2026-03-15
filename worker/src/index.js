@@ -5,6 +5,18 @@ export default {
       }
 
       const url = new URL(request.url);
+
+      // redirect objects pointing to to stable to v3.23.
+      // this should be kept update with the latest stable alpine version.
+      // note: watch out for 'v' prefix!
+      const latestAlpineStableVersion = "3.23";
+      if (url.pathname.startsWith("/apk/stable/")) {
+        url.pathname = url.pathname.replace(
+          "/apk/stable/",
+          `/apk/v${latestAlpineStableVersion}/`,
+        );
+      }
+
       // strip leading / and serve index.html for root path
       const key = url.pathname.slice(1) || 'index.html';
 
