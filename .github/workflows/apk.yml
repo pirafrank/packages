@@ -94,6 +94,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.checks.outputs.MATRIX) }}
+    env:
+      ASSET_NAME: ${{ needs.checks.outputs.APP_NAME }}-${{ needs.checks.outputs.APP_VERSION }}-${{ matrix.target }}.tar.gz
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -106,13 +108,32 @@ jobs:
         run: |
           gh release download "${{ needs.checks.outputs.RESOLVED_TAG }}" \
             --repo "${{ needs.checks.outputs.SOURCE_REPO }}" \
-            --pattern "${{ needs.checks.outputs.APP_NAME }}-*-${{ matrix.target }}.tar.gz" \
+            --pattern "${ASSET_NAME}" \
             --dir downloads/
+
+      - name: Verify release asset checksum
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGES_GH_TOKEN }}
+        run: |
+          EXPECTED_DIGEST=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ needs.checks.outputs.SOURCE_REPO }}/releases/tags/${{ needs.checks.outputs.RESOLVED_TAG }}" \
+            --jq ".assets[] | select(.name == \"${ASSET_NAME}\") | .digest")
+
+          case "${EXPECTED_DIGEST}" in
+            sha256:*) ;;
+            *)
+              echo "ERROR: missing sha256 digest for ${ASSET_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "${EXPECTED_DIGEST#sha256:}  downloads/${ASSET_NAME}" | sha256sum -c -
 
       - name: Extract binary
         run: |
           mkdir -p binary
-          tar -xzf downloads/${{ needs.checks.outputs.APP_NAME }}-*-${{ matrix.target }}.tar.gz \
+          tar -xzf "downloads/${ASSET_NAME}" \
             -C binary/ "${{ needs.checks.outputs.APP_NAME }}"
 
       - name: Install poof and bws CLI
