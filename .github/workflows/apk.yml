@@ -209,7 +209,7 @@ jobs:
             apk-builder:${{ matrix.alpine_version }}
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.checks.outputs.APP_NAME }}-apk-${{ matrix.alpine_version }}-${{ matrix.apk_arch }}
           path: packages/apk/
