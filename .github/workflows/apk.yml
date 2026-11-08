@@ -133,8 +133,27 @@ jobs:
       - name: Extract binary
         run: |
           mkdir -p binary
-          tar -xzf "downloads/${ASSET_NAME}" \
-            -C binary/ "${{ needs.checks.outputs.APP_NAME }}"
+          ARCHIVE_ENTRIES=$(tar -tzf "downloads/${ASSET_NAME}")
+          if grep -Fxq -- "${{ needs.checks.outputs.APP_NAME }}" <<< "$ARCHIVE_ENTRIES"; then
+            tar -xzf "downloads/${ASSET_NAME}" \
+              -C binary/ "${{ needs.checks.outputs.APP_NAME }}"
+          else
+            tar -xzf "downloads/${ASSET_NAME}" \
+              -C binary/ --wildcards --no-wildcards-match-slash --strip-components=1 \
+              "*/${{ needs.checks.outputs.APP_NAME }}"
+          fi
+
+          binary="binary/${{ needs.checks.outputs.APP_NAME }}"
+          if [[ ! -f "$binary" || -L "$binary" ]]; then
+            echo "::error::Expected a regular file, not a symlink: $binary"
+            exit 1
+          fi
+          # APT and YUM inherit archive permissions; reject incorrectly packaged
+          # releases instead of masking missing executable permissions with chmod +x.
+          if [[ ! -x "$binary" ]]; then
+            echo "::error::Extracted binary is not executable: $binary"
+            exit 1
+          fi
 
       - name: Install poof and bws CLI
         uses: pirafrank/poof@main
