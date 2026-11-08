@@ -158,6 +158,7 @@ jobs:
       - name: Install poof and bws CLI
         uses: pirafrank/poof@main
         with:
+          version: v0.6.2
           packages: |
             bitwarden/sdk-sm@bws-v2.0.0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -263,6 +264,7 @@ jobs:
       - name: Install poof and bws CLI
         uses: pirafrank/poof@main
         with:
+          version: v0.6.2
           packages: |
             bitwarden/sdk-sm@bws-v2.0.0
           token: ${{ secrets.GITHUB_TOKEN }}
